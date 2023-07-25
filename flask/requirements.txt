@@ -1,0 +1,6 @@
+Flask
+Flask-SQLAlchemy
+Flask-Session
+pymysql
+Werkzeug
+gunicorn

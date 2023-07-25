@@ -1,0 +1,84 @@
+version: "3.7"
+
+services:
+  nginx-proxy:
+    # build: nginx
+    image: rockman4308/simplelogin-nginx-proxy
+    restart: always
+    volumes:
+      - ./nginx/default.conf:/tmp/default.conf
+    environment: 
+      - FLASK_SERVER_ADDR=flask-app:8000
+    ports:
+      - "80:80"
+    networks:
+      - frontnet
+    depends_on:
+      - flask-app
+    healthcheck:
+      test: ["CMD-SHELL", "curl --silent --fail localhost:80/health-check || exit 1"]
+      interval: 10s
+      timeout: 10s
+      retries: 3
+    command: /app/start.sh
+
+  flask-app:
+    # build: flask
+    image: rockman4308/simplelogin-flask-app
+    restart: always
+    ports: 
+      - '8000:8000'
+    networks:
+      - backnet
+      - frontnet
+    healthcheck:
+      test: ["CMD-SHELL", "curl --silent --fail localhost:8000/flask-health-check || exit 1"]
+      interval: 10s
+      timeout: 10s
+      retries: 3
+    secrets:
+      - db-password
+      - password-salt
+    depends_on:
+      - db
+    command: gunicorn -w 3 -t 60 -b 0.0.0.0:8000 app:app
+      
+  # mysql:
+  #   image: mysql:5.7
+  #   ports:
+  #     - 3306:3306
+  #   volumes:
+  #     - ./sqls:/docker-entrypoint-initdb.d
+  
+  db:
+    image: mysql:5.7
+    command: '--default-authentication-plugin=mysql_native_password'
+    restart: always
+    healthcheck:
+      test: ['CMD-SHELL', 'mysqladmin ping -h 127.0.0.1 --password="$$(cat /run/secrets/db-password)" --silent']
+      interval: 3s
+      retries: 5
+      start_period: 30s
+    secrets:
+      - db-password
+    volumes:
+      # - db-data:/var/lib/mysql
+      - ./sqls:/docker-entrypoint-initdb.d
+    networks:
+      - backnet
+    environment:
+      - MYSQL_DATABASE=example
+      - MYSQL_ROOT_PASSWORD_FILE=/run/secrets/db-password
+    expose:
+      - 3306
+      - 33060
+
+secrets:
+  db-password:
+    file: secrect/dbpassword.txt
+  password-salt:
+    file: secrect/salt.txt
+
+networks:
+  backnet:
+  frontnet:
